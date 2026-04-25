@@ -144,10 +144,35 @@ if (error) {
       });
   };
 } else {
-  // No token — relay is open as a window (proxy mode)
+  // No token — relay is open as proxy window
+  // Announce to any listening Drift instances
   document.getElementById('status').innerHTML =
     '<span class="success">✓ Relay active — return to Drift</span>';
 }
+
+// Always announce relay is ready (works for both OAuth redirect and direct open)
+function announceReady() {
+  // Try to message the opener if it exists
+  if (window.opener) {
+    try { window.opener.postMessage({ type: 'DRIFT_RELAY_READY' }, '*'); } catch(e) {}
+  }
+  // Also broadcast to all same-origin windows
+  try {
+    const bc = new BroadcastChannel('drift_relay');
+    bc.postMessage({ type: 'DRIFT_RELAY_READY' });
+    setTimeout(() => bc.close(), 1000);
+  } catch(e) {}
+  // Keep announcing every 2s for 20s in case Drift loads after relay
+  let count = 0;
+  const interval = setInterval(() => {
+    if (window.opener) {
+      try { window.opener.postMessage({ type: 'DRIFT_RELAY_READY' }, '*'); } catch(e) {}
+    }
+    if (++count >= 10) clearInterval(interval);
+  }, 2000);
+}
+// Announce after a short delay to ensure everything is loaded
+setTimeout(announceReady, 500);
 </script>
 </body>
 </html>
