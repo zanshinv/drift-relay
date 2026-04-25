@@ -2,119 +2,152 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Drift — connecting to Google Drive…</title>
+  <title>Drift Relay</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #06040f;
-      color: #c4b0ff;
-      font-family: 'Space Mono', monospace;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .logo { font-size: 48px; animation: pulse 2s ease-in-out infinite; }
-    @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
-    h1 { font-size: 13px; letter-spacing: .2em; text-transform: uppercase; opacity: .7; }
-    .status { font-size: 11px; opacity: .5; margin-top: 8px; }
-    .token-box {
-      width: 90%; max-width: 480px;
-      padding: 12px; background: rgba(0,0,0,0.4);
-      border: 1px solid rgba(148,100,220,0.4);
-      border-radius: 8px; color: #c4b0ff;
-      font-family: monospace; font-size: 11px;
-      word-break: break-all; min-height: 60px;
-      resize: none; margin-top: 8px;
-    }
-    .card {
-      background: rgba(148,100,220,0.08);
-      border: 1px solid rgba(148,100,220,0.3);
-      border-radius: 10px; padding: 20px 24px;
-      max-width: 480px; width: 90%;
-      display: flex; flex-direction: column; gap: 10px;
-    }
-    .card p { font-size: 12px; opacity: .7; line-height: 1.7; }
-    button {
-      padding: 10px 16px;
-      background: rgba(148,100,220,0.25);
-      border: 1px solid rgba(148,100,220,0.5);
-      border-radius: 6px; color: #c4b0ff;
-      cursor: pointer; font-family: monospace;
-      font-size: 12px; width: 100%;
-    }
-    button:hover { background: rgba(148,100,220,0.4); }
-    .success { color: #9de0c8; }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#06040f;color:#c4b0ff;font-family:'Space Mono',monospace;
+      display:flex;align-items:center;justify-content:center;
+      min-height:100vh;flex-direction:column;gap:20px}
+    .logo{font-size:48px;animation:pulse 2s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+    h1{font-size:13px;letter-spacing:.2em;text-transform:uppercase;opacity:.7}
+    .status{font-size:11px;opacity:.5;margin-top:8px}
+    .card{background:rgba(148,100,220,0.08);border:1px solid rgba(148,100,220,0.3);
+      border-radius:10px;padding:20px 24px;max-width:480px;width:90%;
+      display:flex;flex-direction:column;gap:10px}
+    .card p{font-size:12px;opacity:.7;line-height:1.7}
+    textarea{width:100%;padding:10px;background:rgba(0,0,0,0.4);
+      border:1px solid rgba(148,100,220,0.3);border-radius:6px;
+      color:#c4b0ff;font-family:monospace;font-size:11px;
+      word-break:break-all;min-height:60px;resize:none}
+    button{padding:10px 16px;background:rgba(148,100,220,0.25);
+      border:1px solid rgba(148,100,220,0.5);border-radius:6px;
+      color:#c4b0ff;cursor:pointer;font-family:monospace;font-size:12px;width:100%}
+    button:hover{background:rgba(148,100,220,0.4)}
+    .success{color:#9de0c8}
   </style>
 </head>
 <body>
   <div class="logo">🌌</div>
   <h1>Drift</h1>
-  <div class="status" id="status">Connecting…</div>
+  <div class="status" id="status">Ready</div>
 
-  <script>
-    const hash   = new URLSearchParams(window.location.hash.slice(1));
-    const token  = hash.get('access_token');
-    const error  = hash.get('error');
-    const status = document.getElementById('status');
+<script>
+// ── CORS proxy for Drive API calls ─────────────────────────────────
+// Drift artifact posts messages here; we forward to googleapis.com and reply
 
-    if (error) {
-      status.textContent = 'Connection failed: ' + error;
+const ALLOWED_ORIGIN = 'https://claude.ai';
 
-    } else if (token) {
-      // Store token in localStorage so Drift can poll for it
-      // Use a key that includes the origin so Drift knows where to look
-      try {
-        localStorage.setItem('drift_gdrive_token', token);
-        localStorage.setItem('drift_gdrive_token_ts', Date.now().toString());
-      } catch(e) {}
+// Handle Drive API proxy requests from the artifact via postMessage
+window.addEventListener('message', async (e) => {
+  if (e.origin !== ALLOWED_ORIGIN) return;
+  const msg = e.data;
 
-      // Also try postMessage to opener
-      if (window.opener) {
-        try {
-          window.opener.postMessage({ type: 'DRIFT_OAUTH_TOKEN', token }, '*');
-        } catch(e) {}
-      }
+  // OAuth token receipt
+  if (msg?.type === 'DRIFT_OAUTH_TOKEN') return; // ignore, handled below
 
-      // Also try BroadcastChannel
-      try {
-        const bc = new BroadcastChannel('drift_oauth');
-        bc.postMessage({ type: 'DRIFT_OAUTH_TOKEN', token });
-        setTimeout(() => bc.close(), 3000);
-      } catch(e) {}
-
-      status.innerHTML = '<span class="success">✓ Connected successfully</span>';
-
-      // Show manual copy as fallback
-      const card = document.createElement('div');
-      card.className = 'card';
-      card.innerHTML = `
-        <p><strong>Switch back to the Drift tab.</strong> It should connect automatically within a few seconds.</p>
-        <p>If Drift doesn't connect, copy the token below and paste it when Drift asks:</p>
-        <textarea class="token-box" readonly>${token}</textarea>
-        <button id="copyBtn">Copy token to clipboard</button>
-      `;
-      document.body.appendChild(card);
-
-      document.getElementById('copyBtn').onclick = () => {
-        navigator.clipboard.writeText(token)
-          .then(() => { document.getElementById('copyBtn').textContent = '✓ Copied!'; })
-          .catch(() => {
-            const ta = card.querySelector('textarea');
-            ta.select(); document.execCommand('copy');
-            document.getElementById('copyBtn').textContent = '✓ Copied!';
-          });
-      };
-
-    } else {
-      status.textContent = 'Waiting for token…';
-      const card = document.createElement('div');
-      card.className = 'card';
-      card.innerHTML = '<p>No token detected. Please try connecting Drive again from inside Drift.</p>';
-      document.body.appendChild(card);
+  // Drive API proxy request
+  if (msg?.type === 'DRIFT_DRIVE_REQUEST' && msg.id) {
+    const { id, url, token } = msg;
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      e.source.postMessage({
+        type: 'DRIFT_DRIVE_RESPONSE',
+        id,
+        ok: res.ok,
+        status: res.status,
+        data
+      }, ALLOWED_ORIGIN);
+    } catch(err) {
+      e.source.postMessage({
+        type: 'DRIFT_DRIVE_RESPONSE',
+        id,
+        ok: false,
+        status: 0,
+        error: err.message
+      }, ALLOWED_ORIGIN);
     }
-  </script>
+    return;
+  }
+
+  // File download proxy request
+  if (msg?.type === 'DRIFT_DRIVE_DOWNLOAD' && msg.id) {
+    const { id, url, token, encoding } = msg;
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      let payload;
+      if (encoding === 'text') {
+        payload = await res.text();
+        e.source.postMessage({ type:'DRIFT_DRIVE_DOWNLOAD_RESPONSE', id, ok:true, text:payload }, ALLOWED_ORIGIN);
+      } else {
+        const buf = await res.arrayBuffer();
+        // Convert to base64 for transfer
+        const bytes = new Uint8Array(buf);
+        let b64 = '';
+        const chunk = 8192;
+        for (let i=0; i<bytes.length; i+=chunk) {
+          b64 += String.fromCharCode(...bytes.subarray(i, i+chunk));
+        }
+        b64 = btoa(b64);
+        e.source.postMessage({ type:'DRIFT_DRIVE_DOWNLOAD_RESPONSE', id, ok:true, b64 }, ALLOWED_ORIGIN);
+      }
+    } catch(err) {
+      e.source.postMessage({ type:'DRIFT_DRIVE_DOWNLOAD_RESPONSE', id, ok:false, error:err.message }, ALLOWED_ORIGIN);
+    }
+    return;
+  }
+});
+
+// ── OAuth token handling ─────────────────────────────────────────
+const hash  = new URLSearchParams(window.location.hash.slice(1));
+const token = hash.get('access_token');
+const error = hash.get('error');
+
+if (error) {
+  document.getElementById('status').textContent = 'Connection failed: ' + error;
+} else if (token) {
+  document.getElementById('status').innerHTML = '<span class="success">✓ Connected — switch back to Drift</span>';
+
+  // Try to send token back to opener
+  if (window.opener) {
+    try { window.opener.postMessage({ type:'DRIFT_OAUTH_TOKEN', token }, ALLOWED_ORIGIN); } catch(e) {}
+  }
+  try {
+    const bc = new BroadcastChannel('drift_oauth');
+    bc.postMessage({ type:'DRIFT_OAUTH_TOKEN', token });
+    setTimeout(()=>bc.close(), 3000);
+  } catch(e) {}
+
+  // Show manual copy fallback
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <p><strong>Switch back to the Drift tab.</strong> It should connect automatically.</p>
+    <p>If not, copy this token and paste it into Drift:</p>
+    <textarea readonly>${token}</textarea>
+    <button id="copyBtn">Copy token</button>
+  `;
+  document.body.appendChild(card);
+  document.getElementById('copyBtn').onclick = () => {
+    navigator.clipboard.writeText(token)
+      .then(()=>{ document.getElementById('copyBtn').textContent='✓ Copied!'; })
+      .catch(()=>{
+        card.querySelector('textarea').select();
+        document.execCommand('copy');
+        document.getElementById('copyBtn').textContent='✓ Copied!';
+      });
+  };
+} else {
+  // No token — relay is open as a window (proxy mode)
+  document.getElementById('status').innerHTML =
+    '<span class="success">✓ Relay active — return to Drift</span>';
+}
+</script>
 </body>
 </html>
