@@ -2,16 +2,14 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Drift Importer</title>
+  <title>Drift Relay</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{background:#06040f;color:#c4b0ff;font-family:'Space Mono',monospace;min-height:100vh;padding:20px}
-    h1{font-size:13px;letter-spacing:.2em;text-transform:uppercase;opacity:.7;margin-bottom:4px}
+    h1{font-size:13px;letter-spacing:.2em;text-transform:uppercase;opacity:.7}
     .logo{font-size:32px;display:inline-block;margin-right:10px;vertical-align:middle}
     .header{display:flex;align-items:center;gap:12px;padding:16px 0 20px;border-bottom:1px solid rgba(148,100,220,0.2);margin-bottom:20px}
-    .title{font-family:'Space Mono',monospace}
-    .subtitle{font-size:10px;opacity:.5;margin-top:3px}
-    .status{display:inline-block;padding:3px 10px;border-radius:10px;font-size:10px;margin-left:auto}
+    .status{display:inline-block;padding:3px 10px;border-radius:10px;font-size:10px}
     .status.ok{background:rgba(157,224,200,0.15);color:#9de0c8;border:1px solid rgba(157,224,200,0.3)}
     .status.err{background:rgba(255,126,179,0.1);color:#ff7eb3;border:1px solid rgba(255,126,179,0.3)}
     .status.dim{background:rgba(148,100,220,0.1);color:#c4b0ff;border:1px solid rgba(148,100,220,0.2)}
@@ -20,372 +18,454 @@
     button{padding:8px 16px;background:rgba(148,100,220,0.2);border:1px solid rgba(148,100,220,0.4);border-radius:6px;color:#c4b0ff;cursor:pointer;font-family:monospace;font-size:11px;transition:all .15s}
     button:hover{background:rgba(148,100,220,0.35)}
     button.primary{background:rgba(148,100,220,0.3);border-color:rgba(148,100,220,0.6);color:#e0d0ff}
-    button:disabled{opacity:.4;cursor:not-allowed}
-    input[type=text],textarea{width:100%;padding:8px 10px;background:rgba(0,0,0,0.3);border:1px solid rgba(148,100,220,0.25);border-radius:6px;color:#c4b0ff;font-family:monospace;font-size:11px;margin-bottom:8px}
+    input,textarea{width:100%;padding:8px 10px;background:rgba(0,0,0,0.3);border:1px solid rgba(148,100,220,0.25);border-radius:6px;color:#c4b0ff;font-family:monospace;font-size:11px;margin-bottom:8px}
+    .log{font-size:10px;color:#9de0c8;line-height:1.8;max-height:160px;overflow:auto;margin-top:8px}
     .file-list{display:flex;flex-direction:column;gap:6px;max-height:400px;overflow:auto;margin-top:8px}
     .file-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;border:1px solid rgba(148,100,220,0.15);background:rgba(148,100,220,0.04);cursor:pointer;transition:all .15s}
-    .file-row:hover{background:rgba(148,100,220,0.1);border-color:rgba(148,100,220,0.3)}
-    .file-row.selected{background:rgba(148,100,220,0.15);border-color:rgba(148,100,220,0.5)}
+    .file-row:hover,.file-row.selected{background:rgba(148,100,220,0.12);border-color:rgba(148,100,220,0.4)}
     .file-name{flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .file-date{font-size:9px;color:rgba(196,176,255,.5);flex-shrink:0}
-    .check{width:16px;height:16px;border-radius:4px;border:1px solid rgba(148,100,220,0.4);background:transparent;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px}
-    .check.on{background:rgba(148,100,220,0.5);border-color:rgba(148,100,220,0.8)}
-    .progress{height:3px;background:rgba(148,100,220,0.15);border-radius:2px;margin-top:8px;overflow:hidden}
+    .check{width:16px;height:16px;border-radius:4px;border:1px solid rgba(148,100,220,0.4);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+    .check.on{background:rgba(148,100,220,0.5)}
+    .progress{height:3px;background:rgba(148,100,220,0.15);border-radius:2px;overflow:hidden;margin-top:8px}
     .progress-bar{height:100%;background:linear-gradient(90deg,#b87aff,#c4b0ff);border-radius:2px;transition:width .3s;width:0%}
-    .log{font-size:10px;color:#9de0c8;line-height:1.8;margin-top:8px;max-height:120px;overflow:auto}
     .tabs{display:flex;gap:6px;margin-bottom:12px}
-    .tab{padding:4px 12px;border-radius:6px;border:1px solid;cursor:pointer;font-size:10px;font-family:monospace;transition:all .15s}
+    .tab{padding:4px 12px;border-radius:6px;border:1px solid;cursor:pointer;font-size:10px;font-family:monospace}
     .tab.on{background:rgba(148,100,220,0.2);border-color:rgba(148,100,220,0.5);color:#e0d0ff}
     .tab.off{background:transparent;border-color:rgba(148,100,220,0.2);color:rgba(196,176,255,.5)}
-    .import-result{display:none;margin-top:10px}
     .dl-btn{display:block;width:100%;padding:12px;text-align:center;background:linear-gradient(135deg,rgba(148,100,220,0.3),rgba(100,80,180,0.2));border:1px solid rgba(148,100,220,0.5);border-radius:8px;color:#e0d0ff;font-size:13px;font-family:monospace;cursor:pointer;margin-top:10px}
-    .dl-btn:hover{background:linear-gradient(135deg,rgba(148,100,220,0.45),rgba(100,80,180,0.3))}
     .ok{color:#9de0c8}.err{color:#ff7eb3}
-    .drop-zone{border:2px dashed rgba(148,100,220,0.3);border-radius:10px;padding:30px;text-align:center;font-size:11px;color:rgba(196,176,255,.5);cursor:pointer;transition:all .2s;margin-bottom:12px}
-    .drop-zone:hover,.drop-zone.over{border-color:rgba(148,100,220,0.6);background:rgba(148,100,220,0.06);color:#c4b0ff}
-    select{padding:7px 10px;background:rgba(0,0,0,0.3);border:1px solid rgba(148,100,220,0.25);border-radius:6px;color:#c4b0ff;font-family:monospace;font-size:11px;margin-bottom:8px;width:100%}
   </style>
 </head>
 <body>
-
 <div class="header">
   <span class="logo">🌌</span>
-  <div class="title">
-    <h1>Drift Importer</h1>
-    <div class="subtitle">Google Drive → Drift</div>
+  <div>
+    <h1>Drift Relay</h1>
+    <div style="font-size:10px;opacity:.5;margin-top:3px">Google Drive · Firestore · Charlotte sync</div>
   </div>
-  <span class="status dim" id="connStatus">Not connected</span>
+  <span class="status dim" id="connStatus" style="margin-left:auto">Ready</span>
 </div>
 
-<!-- Step 1: Connect -->
-<div class="card" id="step1">
-  <div class="card-title">Step 1 — Connect Google Drive</div>
-  <p style="font-size:11px;opacity:.7;margin-bottom:10px;line-height:1.6">Click below to sign in to Google. After signing in you'll be redirected back here and your session files will load automatically.</p>
-  <button class="primary" onclick="connectDrive()">Connect Google Drive</button>
+<!-- Mode tabs -->
+<div class="tabs" id="modeTabs">
+  <button class="tab on" onclick="showMode('relay')" id="tab-relay">⚡ Relay</button>
+  <button class="tab off" onclick="showMode('importer')" id="tab-importer">📥 Importer</button>
 </div>
 
-<!-- Step 2: Browse & select files -->
-<div class="card" id="step2" style="display:none">
-  <div class="card-title">Step 2 — Select files to import</div>
-  <div class="tabs" id="folderTabs"></div>
-  <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
-    <button onclick="selectAll()" style="font-size:10px;padding:4px 10px">Select all</button>
-    <button onclick="selectNone()" style="font-size:10px;padding:4px 10px">Clear</button>
-    <span id="selCount" style="font-size:10px;opacity:.6;margin-left:auto"></span>
+<!-- RELAY MODE -->
+<div id="mode-relay">
+  <div class="card">
+    <div class="card-title">Firestore sync relay</div>
+    <p style="font-size:11px;opacity:.7;line-height:1.7;margin-bottom:10px">
+      Keep this tab open while using Drift. It listens for data updates from Drift and writes them to Firestore so Charlotte's view stays current.
+    </p>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="width:7px;height:7px;border-radius:50%;background:#9de0c8;animation:pulse 2s infinite" id="relayDot"></div>
+      <span style="font-size:11px" id="relayStatusText">Listening for Drift data…</span>
+    </div>
+    <div class="log" id="relayLog"></div>
   </div>
-  <div class="file-list" id="fileList"></div>
-</div>
-
-<!-- Step 3: Import -->
-<div class="card" id="step3" style="display:none">
-  <div class="card-title">Step 3 — Download import package</div>
-  <p style="font-size:11px;opacity:.7;margin-bottom:10px;line-height:1.6">
-    Click Import to fetch the selected files. When complete, download the package file and drag it into Drift.
-  </p>
-  <div style="display:flex;gap:8px;align-items:center">
-    <button class="primary" id="importBtn" onclick="runImport()">Import selected files</button>
-    <span id="importStatus" style="font-size:10px;opacity:.6"></span>
+  <div class="card">
+    <div class="card-title">Drive OAuth</div>
+    <p style="font-size:11px;opacity:.7;line-height:1.7;margin-bottom:10px">Sign in to Google Drive to enable the Importer tab and allow file downloads.</p>
+    <button class="primary" onclick="connectDrive()" id="driveBtn">Connect Google Drive</button>
+    <div id="tokenArea" style="display:none;margin-top:10px">
+      <p style="font-size:11px;opacity:.7;margin-bottom:6px">Copy this token and paste into Drift's Drive tab:</p>
+      <textarea id="tokenBox" readonly rows="3"></textarea>
+      <button onclick="copyToken()">Copy token</button>
+    </div>
   </div>
-  <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
-  <div class="log" id="importLog"></div>
-  <button class="dl-btn" id="dlBtn" style="display:none" onclick="downloadPackage()">
-    ⬇ Download import package for Drift
-  </button>
 </div>
 
-<!-- Step 4: Load into Drift -->
-<div class="card" id="step4" style="display:none">
-  <div class="card-title">Step 4 — Load into Drift</div>
-  <p style="font-size:11px;opacity:.7;margin-bottom:12px;line-height:1.6">
-    Go back to Drift → Drive tab → click "Load import package" → select the file you just downloaded. Drift will analyse all the sessions automatically.
-  </p>
-  <div style="font-size:10px;color:#9de0c8">✓ Package ready — return to Drift to load it</div>
+<!-- IMPORTER MODE -->
+<div id="mode-importer" style="display:none">
+  <div class="card" id="importStep1">
+    <div class="card-title">Step 1 — Connect Google Drive</div>
+    <button class="primary" onclick="connectDrive()">Connect Google Drive</button>
+  </div>
+  <div class="card" id="importStep2" style="display:none">
+    <div class="card-title">Step 2 — Select files</div>
+    <div class="tabs" id="folderTabs"></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+      <button onclick="selectAll()" style="font-size:10px;padding:4px 10px">All</button>
+      <button onclick="selectNone()" style="font-size:10px;padding:4px 10px">None</button>
+      <span id="selCount" style="font-size:10px;opacity:.6;margin-left:auto"></span>
+    </div>
+    <div class="file-list" id="fileList"></div>
+  </div>
+  <div class="card" id="importStep3" style="display:none">
+    <div class="card-title">Step 3 — Download import package</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="primary" id="importBtn" onclick="runImport()">Import selected</button>
+      <span id="importStatus" style="font-size:10px;opacity:.6"></span>
+    </div>
+    <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="log" id="importLog"></div>
+    <button class="dl-btn" id="dlBtn" style="display:none" onclick="downloadPackage()">⬇ Download import package for Drift</button>
+  </div>
 </div>
+
+<style>@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}</style>
 
 <script>
-const CLIENT_ID = "834395869210-32eqhsem50sif7f4hihgq084psqt3mmp.apps.googleusercontent.com";
-const RELAY_URL = "https://zanshinv.github.io/drift-relay/";
-const SCOPES    = "https://www.googleapis.com/auth/drive.readonly";
+// ── Config ────────────────────────────────────────────────────────
+const CLIENT_ID  = "834395869210-32eqhsem50sif7f4hihgq084psqt3mmp.apps.googleusercontent.com";
+const RELAY_URL  = "https://zanshinv.github.io/drift-relay/";
+const FS_PROJECT = "drift-8f984";
+const FS_API_KEY = "AIzaSyA7a9l8dTZfUZU1tQPD9UBpRQ4qhnR8N_c";
+const FS_BASE    = `https://firestore.googleapis.com/v1/projects/${FS_PROJECT}/databases/(default)/documents`;
+const FS_PATH    = "drift/vince";
 
 let token = null;
-let driveFiles = { transcripts:[], audio:[], video:[], pdfs:[] };
+let driveFiles = {transcripts:[],audio:[],video:[],pdfs:[]};
 let selectedFiles = new Set();
 let currentFolder = "transcripts";
 let importPackage = null;
 
+// ── Mode switching ────────────────────────────────────────────────
+function showMode(mode) {
+  document.getElementById("mode-relay").style.display    = mode==="relay"    ? "" : "none";
+  document.getElementById("mode-importer").style.display = mode==="importer" ? "" : "none";
+  document.getElementById("tab-relay").className    = "tab " + (mode==="relay"    ? "on" : "off");
+  document.getElementById("tab-importer").className = "tab " + (mode==="importer" ? "on" : "off");
+}
+
+// ── Firestore helpers ─────────────────────────────────────────────
+function toFsValue(val) {
+  if(val===null||val===undefined) return {nullValue:null};
+  if(typeof val==="boolean") return {booleanValue:val};
+  if(typeof val==="number")  return {doubleValue:val};
+  if(typeof val==="string")  return {stringValue:val};
+  if(Array.isArray(val))     return {arrayValue:{values:val.map(toFsValue)}};
+  if(typeof val==="object")  return {mapValue:{fields:toFsFields(val)}};
+  return {stringValue:String(val)};
+}
+function toFsFields(obj) {
+  const f={};
+  for(const [k,v] of Object.entries(obj)) f[k]=toFsValue(v);
+  return f;
+}
+function fromFsValue(fv) {
+  if(!fv) return null;
+  if("nullValue"    in fv) return null;
+  if("booleanValue" in fv) return fv.booleanValue;
+  if("integerValue" in fv) return Number(fv.integerValue);
+  if("doubleValue"  in fv) return fv.doubleValue;
+  if("stringValue"  in fv) return fv.stringValue;
+  if("arrayValue"   in fv) return (fv.arrayValue.values||[]).map(fromFsValue);
+  if("mapValue"     in fv) return fromFsFields(fv.mapValue.fields||{});
+  return null;
+}
+function fromFsFields(fields) {
+  const o={};
+  for(const [k,v] of Object.entries(fields)) o[k]=fromFsValue(v);
+  return o;
+}
+async function fsSet(path, data) {
+  const fields = toFsFields(data);
+  const fieldPaths = Object.keys(fields).map(k=>`updateMask.fieldPaths=${encodeURIComponent(k)}`).join("&");
+  const url = `${FS_BASE}/${path}?${fieldPaths}&key=${FS_API_KEY}`;
+  const r = await fetch(url,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({fields})});
+  if(!r.ok) throw new Error(`Firestore PATCH ${r.status}`);
+}
+async function fsGet(path) {
+  const r = await fetch(`${FS_BASE}/${path}?key=${FS_API_KEY}`);
+  if(r.status===404) return null;
+  if(!r.ok) throw new Error(`Firestore GET ${r.status}`);
+  const doc = await r.json();
+  return doc.fields ? fromFsFields(doc.fields) : null;
+}
+
+// ── Relay: listen for Drift data and write to Firestore ───────────
+function relayLog(msg, cls="") {
+  const el = document.getElementById("relayLog");
+  const line = document.createElement("div");
+  line.className = cls;
+  line.textContent = new Date().toLocaleTimeString() + " " + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+  // Keep max 50 lines
+  while(el.children.length > 50) el.removeChild(el.firstChild);
+}
+
+async function handleDriftData(payload) {
+  if(payload.type !== "DRIFT_FS_WRITE") return;
+  relayLog(`Writing to Firestore…`);
+  try {
+    // Split large arrays to avoid Firestore 1MB limit
+    const data = {...payload.data};
+    // Write in chunks if items array is large
+    if (data.items?.length > 50) {
+      // Write items in batches of 50
+      const chunks = [];
+      for(let i=0; i<data.items.length; i+=50) chunks.push(data.items.slice(i,i+50));
+      for(let c=0; c<chunks.length; c++) {
+        await fsSet(`${FS_PATH}/data/items_${c}`, { items: chunks[c], chunk: c, total: chunks.length });
+      }
+      // Write main doc without items (just meta + crew + memory)
+      const {items, ...mainData} = data;
+      mainData.itemChunks = chunks.length;
+      await fsSet(`${FS_PATH}/data/main`, mainData);
+    } else {
+      await fsSet(`${FS_PATH}/data/main`, data);
+    }
+    relayLog(`✓ Synced — ${data.items?.length||0} sessions, memory updated`, "ok");
+    document.getElementById("relayStatusText").textContent = `✓ Last sync: ${new Date().toLocaleTimeString()}`;
+  } catch(e) {
+    relayLog(`✗ Firestore error: ${e.message}`, "err");
+  }
+}
+
+// Listen via BroadcastChannel
+try {
+  const bc = new BroadcastChannel("drift_relay");
+  bc.onmessage = e => {
+    if(e.data?.type === "DRIFT_FS_WRITE") handleDriftData(e.data);
+    if(e.data?.type === "DRIFT_RELAY_READY") {
+      relayLog("Drift connected via BroadcastChannel", "ok");
+    }
+  };
+  relayLog("BroadcastChannel relay active", "ok");
+} catch(e) {
+  relayLog("BroadcastChannel not available: " + e.message, "err");
+}
+
+// Also listen via postMessage (for when relay is opened as popup)
+window.addEventListener("message", e => {
+  if(e.data?.type === "DRIFT_FS_WRITE") handleDriftData(e.data);
+  if(e.data?.type === "DRIFT_DRIVE_REQUEST") handleDriveRequest(e);
+  if(e.data?.type === "DRIFT_DRIVE_DOWNLOAD") handleDriveDownload(e);
+});
+
+// Drive API proxy (for when sandbox can't reach googleapis directly)
+async function handleDriveRequest(e) {
+  if(!token) { e.source?.postMessage({type:"DRIFT_DRIVE_RESPONSE",id:e.data.id,ok:false,error:"No Drive token"}, "*"); return; }
+  try {
+    const r = await fetch(e.data.url, {headers:{Authorization:`Bearer ${token}`}});
+    const data = await r.json();
+    e.source?.postMessage({type:"DRIFT_DRIVE_RESPONSE",id:e.data.id,ok:r.ok,status:r.status,data:JSON.stringify(data)},"*");
+  } catch(err) {
+    e.source?.postMessage({type:"DRIFT_DRIVE_RESPONSE",id:e.data.id,ok:false,error:err.message},"*");
+  }
+}
+async function handleDriveDownload(e) {
+  if(!token) { e.source?.postMessage({type:"DRIFT_DRIVE_DOWNLOAD_RESPONSE",id:e.data.id,ok:false,error:"No Drive token"},"*"); return; }
+  try {
+    const r = await fetch(e.data.url, {headers:{Authorization:`Bearer ${token}`}});
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    if(e.data.encoding==="text") {
+      const text = await r.text();
+      e.source?.postMessage({type:"DRIFT_DRIVE_DOWNLOAD_RESPONSE",id:e.data.id,ok:true,text},"*");
+    } else {
+      const buf = await r.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let b64=""; const chunk=8192;
+      for(let i=0;i<bytes.length;i+=chunk) b64+=String.fromCharCode(...bytes.subarray(i,i+chunk));
+      b64=btoa(b64);
+      e.source?.postMessage({type:"DRIFT_DRIVE_DOWNLOAD_RESPONSE",id:e.data.id,ok:true,b64},"*");
+    }
+  } catch(err) {
+    e.source?.postMessage({type:"DRIFT_DRIVE_DOWNLOAD_RESPONSE",id:e.data.id,ok:false,error:err.message},"*");
+  }
+}
+
 // ── OAuth ─────────────────────────────────────────────────────────
 function connectDrive() {
   const params = new URLSearchParams({
-    client_id: CLIENT_ID,
-    redirect_uri: RELAY_URL,
+    client_id: CLIENT_ID, redirect_uri: RELAY_URL,
     response_type: "token",
-    scope: SCOPES,
+    scope: "https://www.googleapis.com/auth/drive.readonly",
     prompt: "consent",
   });
   window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
-// Check for token in URL hash on load
 function checkToken() {
   const hash = new URLSearchParams(window.location.hash.slice(1));
   const t = hash.get("access_token");
-  if (t) {
-    token = t;
-    window.location.hash = ""; // clean URL
-    setStatus("✓ Connected", "ok");
-    document.getElementById("step1").style.display = "none";
-    document.getElementById("step2").style.display = "block";
-    document.getElementById("step3").style.display = "block";
-    scanDrive();
+  if(!t) return;
+  token = t;
+  window.location.hash = "";
+  document.getElementById("connStatus").textContent = "✓ Drive connected";
+  document.getElementById("connStatus").className = "status ok";
+  document.getElementById("driveBtn").textContent = "✓ Connected";
+  document.getElementById("driveBtn").disabled = true;
+  document.getElementById("tokenArea").style.display = "";
+  document.getElementById("tokenBox").value = t;
+  document.getElementById("importStep1").style.display = "none";
+  document.getElementById("importStep2").style.display = "";
+  document.getElementById("importStep3").style.display = "";
+  relayLog("Drive connected — token active", "ok");
+  // Announce token to any open Drift tabs
+  try {
+    const bc = new BroadcastChannel("drift_oauth");
+    bc.postMessage({type:"DRIFT_OAUTH_TOKEN",token:t});
+    bc.close();
+  } catch(e) {}
+  if(window.opener) {
+    try { window.opener.postMessage({type:"DRIFT_OAUTH_TOKEN",token:t},"*"); } catch(e) {}
   }
+  scanDrive();
+}
+function copyToken() {
+  const t = document.getElementById("tokenBox").value;
+  navigator.clipboard.writeText(t).then(()=>{
+    document.querySelector("[onclick='copyToken()']").textContent="✓ Copied!";
+  }).catch(()=>{
+    document.getElementById("tokenBox").select();
+    document.execCommand("copy");
+  });
 }
 
-function setStatus(msg, cls="dim") {
-  const el = document.getElementById("connStatus");
-  el.textContent = msg;
-  el.className = "status " + cls;
-}
-
-// ── Drive API ─────────────────────────────────────────────────────
+// ── Drive scan & importer ─────────────────────────────────────────
 async function driveGet(path, params={}) {
   const qs = new URLSearchParams(params).toString();
-  const r = await fetch(`https://www.googleapis.com/drive/v3/${path}?${qs}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  if (!r.ok) throw new Error(`Drive API ${r.status}`);
+  const r = await fetch(`https://www.googleapis.com/drive/v3/${path}?${qs}`,{headers:{Authorization:`Bearer ${token}`}});
+  if(!r.ok) throw new Error(`Drive API ${r.status}`);
   return r.json();
 }
-
 async function scanDrive() {
-  setStatus("Scanning Drive…", "dim");
+  document.getElementById("connStatus").textContent = "Scanning Drive…";
   try {
-    const rootSearch = await driveGet("files", {
-      q: "name='Mental Health' and mimeType='application/vnd.google-apps.folder' and trashed=false",
-      fields: "files(id,name)"
+    const rootSearch = await driveGet("files",{
+      q:"name='Mental Health' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+      fields:"files(id,name)"
     });
-    if (!rootSearch.files?.length) throw new Error("Mental Health folder not found");
+    if(!rootSearch.files?.length) throw new Error("Mental Health folder not found");
     const rootId = rootSearch.files[0].id;
-
-    const subs = await driveGet("files", {
-      q: `'${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: "files(id,name)"
+    const subs = await driveGet("files",{
+      q:`'${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields:"files(id,name)"
     });
-    const folderMap = {};
-    for (const f of subs.files||[]) folderMap[f.name] = f.id;
-
-    const listFolder = async (id, mimeFilter="") => {
-      if (!id) return [];
-      let q = `'${id}' in parents and trashed=false`;
-      if (mimeFilter) q += ` and mimeType contains '${mimeFilter}'`;
-      const res = await driveGet("files", {
-        q, orderBy:"createdTime desc", pageSize:"200",
-        fields:"files(id,name,mimeType,size,createdTime,modifiedTime,webViewLink)"
-      });
+    const folderMap={};
+    for(const f of subs.files||[]) folderMap[f.name]=f.id;
+    const listFolder = async(id,mimeFilter="")=>{
+      if(!id) return [];
+      let q=`'${id}' in parents and trashed=false`;
+      if(mimeFilter) q+=` and mimeType contains '${mimeFilter}'`;
+      const res = await driveGet("files",{q,orderBy:"createdTime desc",pageSize:"200",fields:"files(id,name,mimeType,size,createdTime,modifiedTime,webViewLink)"});
       return res.files||[];
     };
-
-    const [transcripts, audio, video, pdfs] = await Promise.all([
+    const [transcripts,audio,video,pdfs] = await Promise.all([
       listFolder(folderMap["Session Transcripts"]),
       listFolder(folderMap["Session Audio"]),
       listFolder(folderMap["Session Video"]),
-      listFolder(folderMap["PDF Notes"], "pdf"),
+      listFolder(folderMap["PDF Notes"],"pdf"),
     ]);
-
-    driveFiles = { transcripts, audio, video, pdfs };
-    setStatus(`✓ Connected — ${transcripts.length} transcripts`, "ok");
-    buildTabs();
+    driveFiles={transcripts,audio,video,pdfs};
+    document.getElementById("connStatus").textContent=`✓ ${transcripts.length} transcripts found`;
+    document.getElementById("connStatus").className="status ok";
+    buildFolderTabs();
     showFolder("transcripts");
   } catch(e) {
-    setStatus("✗ " + e.message, "err");
+    document.getElementById("connStatus").textContent="✗ "+e.message;
+    document.getElementById("connStatus").className="status err";
   }
 }
 
-// ── File browser ──────────────────────────────────────────────────
-const FOLDER_LABELS = {
-  transcripts: "📄 Transcripts",
-  audio:       "🎙 Audio",
-  video:       "🎬 Video",
-  pdfs:        "📋 PDF Notes"
-};
-
-function buildTabs() {
-  const tabs = document.getElementById("folderTabs");
-  tabs.innerHTML = "";
-  for (const [key, lbl] of Object.entries(FOLDER_LABELS)) {
-    const count = driveFiles[key]?.length || 0;
-    const btn = document.createElement("button");
-    btn.className = "tab " + (key===currentFolder?"on":"off");
-    btn.textContent = `${lbl} (${count})`;
-    btn.onclick = () => showFolder(key);
+const FOLDER_LABELS={transcripts:"📄 Transcripts",audio:"🎙 Audio",video:"🎬 Video",pdfs:"📋 PDF Notes"};
+function buildFolderTabs() {
+  const tabs=document.getElementById("folderTabs"); tabs.innerHTML="";
+  for(const [key,lbl] of Object.entries(FOLDER_LABELS)) {
+    const count=driveFiles[key]?.length||0;
+    const btn=document.createElement("button");
+    btn.className="tab "+(key===currentFolder?"on":"off");
+    btn.textContent=`${lbl} (${count})`;
+    btn.onclick=()=>showFolder(key);
     tabs.appendChild(btn);
   }
 }
-
 function showFolder(folder) {
-  currentFolder = folder;
-  buildTabs();
-  const list = document.getElementById("fileList");
-  list.innerHTML = "";
-  const files = driveFiles[folder] || [];
-  if (!files.length) {
-    list.innerHTML = '<div style="font-size:11px;opacity:.5;padding:10px">No files in this folder</div>';
-    return;
-  }
-  for (const file of files) {
-    const row = document.createElement("div");
-    row.className = "file-row" + (selectedFiles.has(file.id) ? " selected" : "");
-    row.dataset.id = file.id;
-    const check = document.createElement("div");
-    check.className = "check" + (selectedFiles.has(file.id) ? " on" : "");
-    check.textContent = selectedFiles.has(file.id) ? "✓" : "";
-    const name = document.createElement("div");
-    name.className = "file-name";
-    name.textContent = file.name;
-    const date = document.createElement("div");
-    date.className = "file-date";
-    date.textContent = file.createdTime ? new Date(file.createdTime).toLocaleDateString("en-GB") : "";
-    row.appendChild(check);
-    row.appendChild(name);
-    row.appendChild(date);
-    row.onclick = () => toggleFile(file, row, check);
+  currentFolder=folder; buildFolderTabs();
+  const list=document.getElementById("fileList"); list.innerHTML="";
+  const files=driveFiles[folder]||[];
+  if(!files.length){list.innerHTML='<div style="font-size:11px;opacity:.5;padding:10px">No files</div>';return;}
+  for(const file of files) {
+    const row=document.createElement("div");
+    row.className="file-row"+(selectedFiles.has(file.id)?" selected":"");
+    const check=document.createElement("div");
+    check.className="check"+(selectedFiles.has(file.id)?" on":"");
+    check.textContent=selectedFiles.has(file.id)?"✓":"";
+    const name=document.createElement("div"); name.className="file-name"; name.textContent=file.name;
+    const date=document.createElement("div"); date.className="file-date";
+    date.textContent=file.createdTime?new Date(file.createdTime).toLocaleDateString("en-GB"):"";
+    row.appendChild(check); row.appendChild(name); row.appendChild(date);
+    row.onclick=()=>toggleFile(file,row,check);
     list.appendChild(row);
   }
   updateSelCount();
 }
-
-function toggleFile(file, row, check) {
-  if (selectedFiles.has(file.id)) {
-    selectedFiles.delete(file.id);
-    row.classList.remove("selected");
-    check.classList.remove("on");
-    check.textContent = "";
-  } else {
-    selectedFiles.add(file.id);
-    row.classList.add("selected");
-    check.classList.add("on");
-    check.textContent = "✓";
-  }
+function toggleFile(file,row,check) {
+  if(selectedFiles.has(file.id)){selectedFiles.delete(file.id);row.classList.remove("selected");check.classList.remove("on");check.textContent="";}
+  else{selectedFiles.add(file.id);row.classList.add("selected");check.classList.add("on");check.textContent="✓";}
   updateSelCount();
 }
+function selectAll(){const files=driveFiles[currentFolder]||[];for(const f of files)selectedFiles.add(f.id);showFolder(currentFolder);}
+function selectNone(){const files=driveFiles[currentFolder]||[];for(const f of files)selectedFiles.delete(f.id);showFolder(currentFolder);}
+function updateSelCount(){document.getElementById("selCount").textContent=selectedFiles.size>0?`${selectedFiles.size} selected`:"";}
 
-function selectAll() {
-  const files = driveFiles[currentFolder] || [];
-  for (const f of files) selectedFiles.add(f.id);
-  showFolder(currentFolder);
-}
-function selectNone() {
-  const files = driveFiles[currentFolder] || [];
-  for (const f of files) selectedFiles.delete(f.id);
-  showFolder(currentFolder);
-}
+function findFile(id){for(const files of Object.values(driveFiles)){const f=files.find(x=>x.id===id);if(f)return f;}return null;}
 
-function updateSelCount() {
-  document.getElementById("selCount").textContent =
-    selectedFiles.size > 0 ? `${selectedFiles.size} selected` : "";
+function importLog(msg,cls=""){
+  const el=document.getElementById("importLog");
+  const line=document.createElement("div"); line.className=cls; line.textContent=msg;
+  el.appendChild(line); el.scrollTop=el.scrollHeight;
 }
-
-// ── Import ────────────────────────────────────────────────────────
-function logLine(msg, cls="") {
-  const el = document.getElementById("importLog");
-  const line = document.createElement("div");
-  line.className = cls;
-  line.textContent = msg;
-  el.appendChild(line);
-  el.scrollTop = el.scrollHeight;
-}
-
-function setProgress(pct) {
-  document.getElementById("progressBar").style.width = pct + "%";
-}
-
-// Find file object by id across all folders
-function findFile(id) {
-  for (const files of Object.values(driveFiles)) {
-    const f = files.find(x=>x.id===id);
-    if (f) return f;
-  }
-  return null;
-}
+function setProgress(pct){document.getElementById("progressBar").style.width=pct+"%";}
 
 async function runImport() {
-  if (!selectedFiles.size) { alert("Select at least one file first"); return; }
-  document.getElementById("importBtn").disabled = true;
-  document.getElementById("importLog").innerHTML = "";
-  document.getElementById("dlBtn").style.display = "none";
+  if(!selectedFiles.size){alert("Select files first");return;}
+  document.getElementById("importBtn").disabled=true;
+  document.getElementById("importLog").innerHTML="";
+  document.getElementById("dlBtn").style.display="none";
   setProgress(0);
-
-  const allSelected = [...selectedFiles].map(id=>findFile(id)).filter(Boolean);
-  const results = [];
-  let done = 0;
-
-  for (const file of allSelected) {
-    logLine(`Fetching: ${file.name}…`);
+  const allSelected=[...selectedFiles].map(id=>findFile(id)).filter(Boolean);
+  const results=[]; let done=0;
+  for(const file of allSelected) {
+    importLog(`Fetching: ${file.name}…`);
     try {
-      const isPDF = file.name.match(/\.pdf$/i);
-      const url = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
-      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-
-      let content, encoding;
-      if (isPDF) {
-        const buf = await r.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        let b64 = "";
-        const chunk = 8192;
-        for (let i=0; i<bytes.length; i+=chunk)
-          b64 += String.fromCharCode(...bytes.subarray(i,i+chunk));
-        content = btoa(b64);
-        encoding = "base64";
-      } else {
-        content = await r.text();
-        encoding = "text";
-      }
-
-      results.push({
-        id: file.id,
-        name: file.name,
-        mimeType: file.mimeType,
-        createdTime: file.createdTime,
-        webViewLink: file.webViewLink,
-        content,
-        encoding,
-      });
-      logLine(`✓ ${file.name}`, "ok");
-    } catch(e) {
-      logLine(`✗ ${file.name}: ${e.message}`, "err");
-    }
-    done++;
-    setProgress(Math.round((done/allSelected.length)*100));
+      const isPDF=file.name.match(/\.pdf$/i);
+      const r=await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,{headers:{Authorization:`Bearer ${token}`}});
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      let content,encoding;
+      if(isPDF){
+        const buf=await r.arrayBuffer(); const bytes=new Uint8Array(buf);
+        let b64=""; const chunk=8192;
+        for(let i=0;i<bytes.length;i+=chunk) b64+=String.fromCharCode(...bytes.subarray(i,i+chunk));
+        content=btoa(b64); encoding="base64";
+      } else {content=await r.text(); encoding="text";}
+      results.push({id:file.id,name:file.name,mimeType:file.mimeType,createdTime:file.createdTime,webViewLink:file.webViewLink,content,encoding});
+      importLog(`✓ ${file.name}`,"ok");
+    } catch(e){importLog(`✗ ${file.name}: ${e.message}`,"err");}
+    done++; setProgress(Math.round((done/allSelected.length)*100));
   }
-
-  importPackage = {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    files: results,
-  };
-
-  logLine(`Done — ${results.length} files ready`);
-  document.getElementById("dlBtn").style.display = "block";
-  document.getElementById("step4").style.display = "block";
-  document.getElementById("importBtn").disabled = false;
-  document.getElementById("importStatus").textContent =
-    `${results.length} files ready to download`;
+  importPackage={version:1,exportedAt:new Date().toISOString(),files:results};
+  importLog(`Done — ${results.length} files ready`);
+  document.getElementById("dlBtn").style.display="block";
+  document.getElementById("importBtn").disabled=false;
+  document.getElementById("importStatus").textContent=`${results.length} files ready`;
 }
-
 function downloadPackage() {
-  if (!importPackage) return;
-  const json = JSON.stringify(importPackage);
-  const blob = new Blob([json], { type: "application/json" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href = url;
-  a.download = `drift-import-${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  if(!importPackage) return;
+  const blob=new Blob([JSON.stringify(importPackage)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url;
+  a.download=`drift-import-${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
 }
+
+// ── Announce relay ready to Drift ─────────────────────────────────
+function announceReady() {
+  try { const bc=new BroadcastChannel("drift_relay"); bc.postMessage({type:"DRIFT_RELAY_READY"}); bc.close(); } catch(e) {}
+  if(window.opener) { try { window.opener.postMessage({type:"DRIFT_RELAY_READY"},"*"); } catch(e) {} }
+}
+setTimeout(announceReady, 500);
+setInterval(announceReady, 5000);
 
 // ── Init ──────────────────────────────────────────────────────────
 checkToken();
+relayLog("Relay started — ready to sync Drift data to Firestore");
 </script>
 </body>
 </html>
