@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Drift — connecting to Google Drive…</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #06040f;
+      color: #c4b0ff;
+      font-family: 'Space Mono', monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .logo { font-size: 48px; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+    h1 { font-size: 13px; letter-spacing: .2em; text-transform: uppercase; opacity: .7; }
+    .status { font-size: 11px; opacity: .5; margin-top: 8px; }
+    .error { color: #ff7eb3; font-size: 12px; max-width: 400px; text-align: center; line-height: 1.6; }
+    .manual { 
+      margin-top: 20px; padding: 16px 20px;
+      background: rgba(148,100,220,0.1); border: 1px solid rgba(148,100,220,0.3);
+      border-radius: 8px; max-width: 500px; width: 90%;
+    }
+    .manual p { font-size: 11px; opacity: .7; margin-bottom: 8px; line-height: 1.6; }
+    .token-box {
+      width: 100%; padding: 8px; background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(148,100,220,0.3); border-radius: 4px;
+      color: #c4b0ff; font-family: monospace; font-size: 10px;
+      word-break: break-all; min-height: 60px; resize: none;
+    }
+    button {
+      margin-top: 8px; padding: 8px 16px; background: rgba(148,100,220,0.2);
+      border: 1px solid rgba(148,100,220,0.5); border-radius: 6px;
+      color: #c4b0ff; cursor: pointer; font-family: monospace; font-size: 11px;
+      width: 100%;
+    }
+    button:hover { background: rgba(148,100,220,0.35); }
+  </style>
+</head>
+<body>
+  <div class="logo">🌌</div>
+  <h1>Drift</h1>
+  <div class="status" id="status">Connecting to Google Drive…</div>
+
+  <script>
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const token = hash.get('access_token');
+    const error = hash.get('error');
+
+    if (error) {
+      document.getElementById('status').textContent = 'Connection failed: ' + error;
+    } else if (token) {
+      document.getElementById('status').textContent = 'Got token — sending to Drift…';
+
+      // Try postMessage to opener (works if popup flow)
+      if (window.opener) {
+        try {
+          window.opener.postMessage({ type: 'DRIFT_OAUTH_TOKEN', token }, '*');
+          document.getElementById('status').textContent = '✓ Connected! You can close this tab.';
+          setTimeout(() => window.close(), 1500);
+        } catch(e) {
+          showManual(token);
+        }
+      } else {
+        // Redirect flow — store in sessionStorage and redirect back
+        try {
+          sessionStorage.setItem('drift_pending_token', token);
+          // Try to find the claude.ai tab via broadcast
+          const bc = new BroadcastChannel('drift_oauth');
+          bc.postMessage({ type: 'DRIFT_OAUTH_TOKEN', token });
+          bc.close();
+          document.getElementById('status').textContent = '✓ Token sent — switch back to Drift.';
+          setTimeout(() => window.close(), 2000);
+        } catch(e) {
+          showManual(token);
+        }
+      }
+    } else {
+      // No token in hash — show manual instructions
+      document.getElementById('status').textContent = 'No token detected in URL.';
+      showManual(null);
+    }
+
+    function showManual(token) {
+      const div = document.createElement('div');
+      div.className = 'manual';
+      if (token) {
+        div.innerHTML = `
+          <p>Drift couldn't receive the token automatically. Copy the token below and paste it into the Drift app when prompted:</p>
+          <textarea class="token-box" readonly>${token}</textarea>
+          <button onclick="navigator.clipboard.writeText('${token}').then(()=>this.textContent='✓ Copied!')">Copy token</button>
+        `;
+      } else {
+        div.innerHTML = `
+          <p>Something went wrong with the OAuth flow. Please try connecting Drive again from inside Drift.</p>
+        `;
+      }
+      document.body.appendChild(div);
+    }
+  </script>
+</body>
+</html>
