@@ -7,172 +7,209 @@
     *{margin:0;padding:0;box-sizing:border-box}
     body{background:#06040f;color:#c4b0ff;font-family:'Space Mono',monospace;
       display:flex;align-items:center;justify-content:center;
-      min-height:100vh;flex-direction:column;gap:20px}
+      min-height:100vh;flex-direction:column;gap:16px;padding:20px}
     .logo{font-size:48px;animation:pulse 2s ease-in-out infinite}
     @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
     h1{font-size:13px;letter-spacing:.2em;text-transform:uppercase;opacity:.7}
-    .status{font-size:11px;opacity:.5;margin-top:8px}
+    .status{font-size:11px;opacity:.6;margin-top:4px;text-align:center;line-height:1.6}
+    .log{width:100%;max-width:480px;max-height:200px;overflow:auto;
+      background:rgba(0,0,0,0.3);border:1px solid rgba(148,100,220,0.2);
+      border-radius:8px;padding:10px;font-size:10px;line-height:1.8;color:#9de0c8}
     .card{background:rgba(148,100,220,0.08);border:1px solid rgba(148,100,220,0.3);
-      border-radius:10px;padding:20px 24px;max-width:480px;width:90%;
-      display:flex;flex-direction:column;gap:10px}
-    .card p{font-size:12px;opacity:.7;line-height:1.7}
-    textarea{width:100%;padding:10px;background:rgba(0,0,0,0.4);
+      border-radius:10px;padding:16px 20px;max-width:480px;width:100%;
+      display:flex;flex-direction:column;gap:8px}
+    .card p{font-size:11px;opacity:.7;line-height:1.7}
+    textarea{width:100%;padding:8px;background:rgba(0,0,0,0.4);
       border:1px solid rgba(148,100,220,0.3);border-radius:6px;
-      color:#c4b0ff;font-family:monospace;font-size:11px;
-      word-break:break-all;min-height:60px;resize:none}
-    button{padding:10px 16px;background:rgba(148,100,220,0.25);
+      color:#c4b0ff;font-family:monospace;font-size:10px;
+      word-break:break-all;min-height:50px;resize:none}
+    button{padding:9px 16px;background:rgba(148,100,220,0.25);
       border:1px solid rgba(148,100,220,0.5);border-radius:6px;
-      color:#c4b0ff;cursor:pointer;font-family:monospace;font-size:12px;width:100%}
+      color:#c4b0ff;cursor:pointer;font-family:monospace;font-size:11px;width:100%}
     button:hover{background:rgba(148,100,220,0.4)}
-    .success{color:#9de0c8}
+    .ok{color:#9de0c8}.err{color:#ff7eb3}.dim{opacity:.4}
   </style>
 </head>
 <body>
   <div class="logo">🌌</div>
-  <h1>Drift</h1>
-  <div class="status" id="status">Ready</div>
+  <h1>Drift Relay</h1>
+  <div class="status" id="status">Initialising…</div>
+  <div class="log" id="log"></div>
 
 <script>
-// ── CORS proxy for Drive API calls ─────────────────────────────────
-// Drift artifact posts messages here; we forward to googleapis.com and reply
+// ── Firestore config (same as Drift app) ─────────────────────────
+const FS_PROJECT = "drift-8f984";
+const FS_API_KEY = "AIzaSyA7a9l8dTZfUZU1tQPD9UBpRQ4qhnR8N_c";
+const FS_BASE    = `https://firestore.googleapis.com/v1/projects/${FS_PROJECT}/databases/(default)/documents`;
+const FS_PATH    = "drift/vince";
 
-const ALLOWED_ORIGIN = 'https://claude.ai';
+function log(msg, cls="") {
+  const el = document.getElementById("log");
+  const line = document.createElement("div");
+  line.className = cls;
+  line.textContent = new Date().toLocaleTimeString() + " " + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
 
-// Handle Drive API proxy requests from the artifact via postMessage
-window.addEventListener('message', async (e) => {
-  if (e.origin !== ALLOWED_ORIGIN) return;
-  const msg = e.data;
+// Firestore helpers
+function toFsValue(val) {
+  if (val===null||val===undefined) return {nullValue:null};
+  if (typeof val==="boolean") return {booleanValue:val};
+  if (typeof val==="number")  return {doubleValue:val};
+  if (typeof val==="string")  return {stringValue:val};
+  if (Array.isArray(val))     return {arrayValue:{values:val.map(toFsValue)}};
+  if (typeof val==="object")  return {mapValue:{fields:toFsFields(val)}};
+  return {stringValue:String(val)};
+}
+function toFsFields(obj) {
+  const f={};
+  for(const [k,v] of Object.entries(obj)) f[k]=toFsValue(v);
+  return f;
+}
+function fromFsValue(fv) {
+  if(!fv) return null;
+  if("nullValue"    in fv) return null;
+  if("booleanValue" in fv) return fv.booleanValue;
+  if("integerValue" in fv) return Number(fv.integerValue);
+  if("doubleValue"  in fv) return fv.doubleValue;
+  if("stringValue"  in fv) return fv.stringValue;
+  if("arrayValue"   in fv) return (fv.arrayValue.values||[]).map(fromFsValue);
+  if("mapValue"     in fv) return fromFsFields(fv.mapValue.fields||{});
+  return null;
+}
+function fromFsFields(fields) {
+  const o={};
+  for(const [k,v] of Object.entries(fields)) o[k]=fromFsValue(v);
+  return o;
+}
 
-  // OAuth token receipt
-  if (msg?.type === 'DRIFT_OAUTH_TOKEN') return; // ignore, handled below
+async function fsGet(path) {
+  const url = `${FS_BASE}/${path}?key=${FS_API_KEY}`;
+  const r = await fetch(url);
+  if (r.status===404) return null;
+  if (!r.ok) throw new Error(`Firestore GET ${r.status}`);
+  const doc = await r.json();
+  return doc.fields ? fromFsFields(doc.fields) : null;
+}
 
-  // Drive API proxy request
-  if (msg?.type === 'DRIFT_DRIVE_REQUEST' && msg.id) {
-    const { id, url, token } = msg;
-    try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
+async function fsSet(path, data) {
+  const fields = toFsFields(data);
+  const fieldPaths = Object.keys(fields).map(k=>`updateMask.fieldPaths=${encodeURIComponent(k)}`).join("&");
+  const url = `${FS_BASE}/${path}?${fieldPaths}&key=${FS_API_KEY}`;
+  const r = await fetch(url, {
+    method:"PATCH",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({fields})
+  });
+  if (!r.ok) throw new Error(`Firestore SET ${r.status}`);
+}
+
+// ── Process a pending Drive API request ──────────────────────────
+async function processRequest(req) {
+  log(`Handling: ${req.type} — ${(req.url||"").slice(0,60)}…`);
+  try {
+    if (req.type === "DRIFT_DRIVE_REQUEST") {
+      const r = await fetch(req.url, {
+        headers: { Authorization: `Bearer ${req.token}` }
       });
-      const data = await res.json();
-      e.source.postMessage({
-        type: 'DRIFT_DRIVE_RESPONSE',
-        id,
-        ok: res.ok,
-        status: res.status,
-        data
-      }, ALLOWED_ORIGIN);
-    } catch(err) {
-      e.source.postMessage({
-        type: 'DRIFT_DRIVE_RESPONSE',
-        id,
-        ok: false,
-        status: 0,
-        error: err.message
-      }, ALLOWED_ORIGIN);
-    }
-    return;
-  }
-
-  // File download proxy request
-  if (msg?.type === 'DRIFT_DRIVE_DOWNLOAD' && msg.id) {
-    const { id, url, token, encoding } = msg;
-    try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
+      const data = await r.json();
+      await fsSet(`${FS_PATH}/relay/response`, {
+        id: req.id, status: "done", ok: r.ok,
+        httpStatus: r.status, data: JSON.stringify(data),
+        ts: new Date().toISOString()
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      log(`✓ Responded (${r.status})`, "ok");
+
+    } else if (req.type === "DRIFT_DRIVE_DOWNLOAD") {
+      const r = await fetch(req.url, {
+        headers: { Authorization: `Bearer ${req.token}` }
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       let payload;
-      if (encoding === 'text') {
-        payload = await res.text();
-        e.source.postMessage({ type:'DRIFT_DRIVE_DOWNLOAD_RESPONSE', id, ok:true, text:payload }, ALLOWED_ORIGIN);
+      if (req.encoding === "text") {
+        payload = await r.text();
+        await fsSet(`${FS_PATH}/relay/response`, {
+          id: req.id, status: "done", ok: true,
+          text: payload.slice(0, 900000), // Firestore 1MB field limit
+          ts: new Date().toISOString()
+        });
       } else {
-        const buf = await res.arrayBuffer();
-        // Convert to base64 for transfer
+        const buf = await r.arrayBuffer();
         const bytes = new Uint8Array(buf);
-        let b64 = '';
+        let b64 = "";
         const chunk = 8192;
-        for (let i=0; i<bytes.length; i+=chunk) {
-          b64 += String.fromCharCode(...bytes.subarray(i, i+chunk));
-        }
+        for (let i=0; i<bytes.length; i+=chunk)
+          b64 += String.fromCharCode(...bytes.subarray(i,i+chunk));
         b64 = btoa(b64);
-        e.source.postMessage({ type:'DRIFT_DRIVE_DOWNLOAD_RESPONSE', id, ok:true, b64 }, ALLOWED_ORIGIN);
+        await fsSet(`${FS_PATH}/relay/response`, {
+          id: req.id, status: "done", ok: true,
+          b64: b64.slice(0, 900000),
+          ts: new Date().toISOString()
+        });
       }
-    } catch(err) {
-      e.source.postMessage({ type:'DRIFT_DRIVE_DOWNLOAD_RESPONSE', id, ok:false, error:err.message }, ALLOWED_ORIGIN);
+      log(`✓ Download complete`, "ok");
     }
-    return;
+  } catch(e) {
+    log(`✗ Error: ${e.message}`, "err");
+    await fsSet(`${FS_PATH}/relay/response`, {
+      id: req.id, status: "done", ok: false,
+      error: e.message, ts: new Date().toISOString()
+    });
   }
-});
+}
+
+// ── Polling loop ─────────────────────────────────────────────────
+let lastId = null;
+async function poll() {
+  try {
+    const pending = await fsGet(`${FS_PATH}/relay/pending`);
+    if (pending && pending.id !== lastId && pending.status === "pending") {
+      lastId = pending.id;
+      await processRequest(pending);
+    }
+  } catch(e) {
+    log(`Poll error: ${e.message}`, "err");
+  }
+}
 
 // ── OAuth token handling ─────────────────────────────────────────
 const hash  = new URLSearchParams(window.location.hash.slice(1));
-const token = hash.get('access_token');
-const error = hash.get('error');
+const token = hash.get("access_token");
+const error = hash.get("error");
 
 if (error) {
-  document.getElementById('status').textContent = 'Connection failed: ' + error;
+  document.getElementById("status").textContent = "Auth error: " + error;
 } else if (token) {
-  document.getElementById('status').innerHTML = '<span class="success">✓ Connected — switch back to Drift</span>';
+  document.getElementById("status").innerHTML =
+    '<span class="ok">✓ Signed in — switch back to Drift and paste the token</span>';
 
-  // Try to send token back to opener
-  if (window.opener) {
-    try { window.opener.postMessage({ type:'DRIFT_OAUTH_TOKEN', token }, ALLOWED_ORIGIN); } catch(e) {}
-  }
-  try {
-    const bc = new BroadcastChannel('drift_oauth');
-    bc.postMessage({ type:'DRIFT_OAUTH_TOKEN', token });
-    setTimeout(()=>bc.close(), 3000);
-  } catch(e) {}
-
-  // Show manual copy fallback
-  const card = document.createElement('div');
-  card.className = 'card';
+  const card = document.createElement("div");
+  card.className = "card";
   card.innerHTML = `
-    <p><strong>Switch back to the Drift tab.</strong> It should connect automatically.</p>
-    <p>If not, copy this token and paste it into Drift:</p>
+    <p>Copy this token and paste it into Drift's Drive tab:</p>
     <textarea readonly>${token}</textarea>
     <button id="copyBtn">Copy token</button>
   `;
   document.body.appendChild(card);
-  document.getElementById('copyBtn').onclick = () => {
+  document.getElementById("copyBtn").onclick = () => {
     navigator.clipboard.writeText(token)
-      .then(()=>{ document.getElementById('copyBtn').textContent='✓ Copied!'; })
+      .then(()=>{ document.getElementById("copyBtn").textContent="✓ Copied!"; })
       .catch(()=>{
-        card.querySelector('textarea').select();
-        document.execCommand('copy');
-        document.getElementById('copyBtn').textContent='✓ Copied!';
+        card.querySelector("textarea").select();
+        document.execCommand("copy");
+        document.getElementById("copyBtn").textContent="✓ Copied!";
       });
   };
-} else {
-  // No token — relay is open as proxy window
-  // Announce to any listening Drift instances
-  document.getElementById('status').innerHTML =
-    '<span class="success">✓ Relay active — return to Drift</span>';
+  log("OAuth token received", "ok");
 }
 
-// Always announce relay is ready (works for both OAuth redirect and direct open)
-function announceReady() {
-  // Try to message the opener if it exists
-  if (window.opener) {
-    try { window.opener.postMessage({ type: 'DRIFT_RELAY_READY' }, '*'); } catch(e) {}
-  }
-  // Also broadcast to all same-origin windows
-  try {
-    const bc = new BroadcastChannel('drift_relay');
-    bc.postMessage({ type: 'DRIFT_RELAY_READY' });
-    setTimeout(() => bc.close(), 1000);
-  } catch(e) {}
-  // Keep announcing every 2s for 20s in case Drift loads after relay
-  let count = 0;
-  const interval = setInterval(() => {
-    if (window.opener) {
-      try { window.opener.postMessage({ type: 'DRIFT_RELAY_READY' }, '*'); } catch(e) {}
-    }
-    if (++count >= 10) clearInterval(interval);
-  }, 2000);
-}
-// Announce after a short delay to ensure everything is loaded
-setTimeout(announceReady, 500);
+// Start polling regardless (relay is always active)
+document.getElementById("status").innerHTML =
+  (token ? '<span class="ok">✓ Signed in · </span>' : "") +
+  '<span class="ok">✓ Relay active — polling for Drive requests</span>';
+log("Relay started — polling Firestore every second");
+setInterval(poll, 1000);
 </script>
 </body>
 </html>
